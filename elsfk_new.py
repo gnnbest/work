@@ -10,104 +10,134 @@ import time
 import cv2.cv
 
 
-
-# log图填充大图
-def fill_ori(img, roi_info, log_map, colour):
-
-    shape = log_map.shape
-    for j in range(0, shape[0]): #行
-        for i in range(0, shape[1]):  #列
-            if log_map[j, i] == 1:
-               img[(j + roi_info['row_p']) * square_h : ((j + roi_info['row_p']) * square_h + square_h),
-               (i + roi_info['col_p'])*square_w : ((i + roi_info['col_p']) * square_w + square_w)] = colour
+def redraw_img(img_map, img):
+    for y in range(0, img_map.shape[0]):  # 行
+        for x in range(0, img_map.shape[1]):  # 列
+            if img_map[y, x] == 1:
+                img[(y * square_h):(y * square_h + square_h),
+                    (x * square_w):(x * square_w + square_w)] = (255, 0, 0)
 
 
-def get_map_roi(shape):
+# 获取形状列表
+def get_block_shape_list():
 
-    if(shape == 'I'):
-        map_roi = np.zeros((1, 4), dtype=np.uint8)
-        map_roi[0,0] = 1 #行列
-        map_roi[0,1] = 1
-        map_roi[0,2] = 1
-        map_roi[0,3] = 1
+    shape_list = []
 
-    if (shape == 'S'):
-        map_roi = np.zeros((2, 3), dtype=np.uint8)
-        map_roi[0, 1] = 1  # 行列
-        map_roi[0, 2] = 1
-        map_roi[1, 0] = 1
-        map_roi[1, 1] = 1
+    shape_I = np.array([[1, 1, 1, 1]])
 
-    if (shape == 'Z'):
-        map_roi = np.zeros((2, 3), dtype=np.uint8)
-        map_roi[0, 0] = 1  # 行列
-        map_roi[0, 1] = 1
-        map_roi[1, 1] = 1
-        map_roi[1, 2] = 1
+    shape_O = np.array([[1, 1],[1, 1]])
 
-    if (shape == 'L'):
-        map_roi = np.zeros((2, 3), dtype=np.uint8)
-        map_roi[0, 0] = 1  # 行列
-        map_roi[1, 0] = 1
-        map_roi[1, 1] = 1
-        map_roi[1, 2] = 1
+    shape_J = np.array([[0, 0, 1],
+                       [1, 1, 1]])
 
-    if (shape == 'J'):
-        map_roi = np.zeros((2, 3), dtype=np.uint8)
-        map_roi[0, 2] = 1  # 行列
-        map_roi[1, 0] = 1
-        map_roi[1, 1] = 1
-        map_roi[1, 2] = 1
+    shape_T = np.array([[0, 1, 0],
+                       [1, 1, 1]])
 
-    if (shape == 'O'):
-        map_roi = np.zeros((2, 2), dtype=np.uint8)
-        map_roi[0, 0] = 1  # 行列
-        map_roi[0, 1] = 1
-        map_roi[1, 0] = 1
-        map_roi[1, 1] = 1
+    shape_L = np.array([[1, 0, 0],
+                       [1, 1, 1]])
 
-    if (shape == 'T'):
-        map_roi = np.zeros((2, 3), dtype=np.uint8)
-        map_roi[0, 1] = 1  # 行列
-        map_roi[1, 0] = 1
-        map_roi[1, 1] = 1
-        map_roi[1, 2] = 1
+    shape_Z = np.array([[1, 1, 0],
+                       [0, 1, 1]])
 
-    return map_roi
+    shape_S = np.array([[0, 1, 1],
+                       [1, 1, 0]])
+
+    shape_list.append(shape_I)
+    shape_list.append(shape_O)
+    shape_list.append(shape_J)
+    shape_list.append(shape_T)
+    shape_list.append(shape_L)
+    shape_list.append(shape_Z)
+    shape_list.append(shape_S)
+
+    return shape_list
+
+#  填充 img_map大图
+def fill_img_map(img_map, log_map, (y_offset, x_offset)):
+    for j in range(0, log_map.shape[0]):
+        for i in range(0, log_map.shape[1]):
+            img_map_tmp[j + y_offset, i + x_offset] = \
+                img_map_tmp[j + y_offset, i + x_offset] or log_map[j, i]
 
 
-# 检测上下碰撞
-def collision_det(img_map, roi_info):
-    is_pz = False
+# 检测上下碰撞和游戏是否已经结束
+def collision_det(img_map, log_map, (y_offset, x_offset)):
 
-    for i in range(0, roi_info['w']):
-        if(img_map[(roi_info['row_p'] + roi_info['h'] -1), (i + roi_info['col_p'])] ==  1 and
-           img_map[(roi_info['row_p'] + roi_info['h'] -1 + 1), (i + roi_info['col_p'])] == 1):
-            is_pz = True
-            return is_pz
-    return is_pz
+    is_collision = False
+
+    # 检测是否和下边缘碰撞
+    if((y_offset + h_block) >= img_map.shape[0]):
+
+        is_collision = True
+        return is_collision
+
+    # 检测是否和现有矩形框碰撞
+    for i in range(0, log_map.shape[1]):
+
+        for j in range(log_map.shape[0] -1, -1, -1):
+
+            y = j + y_offset
+            x = i + x_offset
+
+            if(log_map[j, i] == 1):
+
+                if(img_map[y + 1, x] == 1):
+
+                    is_collision = True
+
+                    return  is_collision
+
+                break
+
+    return is_collision
 
 
-#检测左右碰撞
-def l_r_collision_det(img_map):
+# 检测左右碰撞
+def l_r_collision_det(img_map, (y_offset, x_offset, h_block, w_block)):
+
     can_left_move = True
     can_right_move = True
-    if ((roi_info['col_p'] + roi_info['w']) >= s_num_w):
-        can_right_move = False
-    if(roi_info['col_p'] <= 0):
-        can_left_move = False
+    for i in range(0, h_block):
+
+        if (x_offset <= 0 or
+                (img_map[(i + y_offset), (x_offset - 1)] == 1 and
+                 img_map[(i + y_offset), (x_offset)] == 1)):
+
+            can_left_move = False
+
+        if ((x_offset + w_block -1 ) >= (img_map.shape[1] - 1) or
+                (img_map[(i + y_offset), (x_offset + w_block - 1)] == 1 and
+                 img_map[(i + y_offset), (x_offset + w_block)] == 1)):
+
+            can_right_move = False
 
     return can_left_move, can_right_move
 
 
+# 旋转log图
 def rotae_log(log_map):
     log_map_new = np.rot90(log_map)
     return log_map_new
 
 
+def delete_full_line(img_map):
+
+    for j in range(0, img_map.shape[0]):
+        sum = 0
+        for i in range(0, img_map.shape[1]):
+            sum += img_map[j, i]
+
+        if sum == img_map.shape[1]:
+            img_map = np.delete(img_map, j, 0)
+
+            new_line = np.zeros((10,), dtype=np.uint8)
+            img_map = np.insert(img_map, 0, new_line, 0)
+
+    return img_map
 
 
-num_time = 0
+
+
 
 square_w = 30
 square_h = 30
@@ -121,57 +151,68 @@ img_h = square_h * s_num_h
 Img = Image.new("RGB", (img_w,img_h), (255, 255, 255))
 
 cv2.namedWindow("pic",flags = cv2.WINDOW_AUTOSIZE)
-cv_image = cv2.cvtColor(np.asarray(Img),cv2.COLOR_RGB2BGR)
+img = cv2.cvtColor(np.asarray(Img),cv2.COLOR_RGB2BGR)
+
+
+shape_list = get_block_shape_list()
 
 # 初始log映射
-log_map = get_map_roi('I')
+log_map = random.choice(shape_list)
 
 # 初始化大图映射
 img_map = np.zeros((24, 10), dtype=np.uint8)
 
 #log图在大图上的初始坐标（左下角）
-init_cord = (4, 3)
-
-row_value = 4
-col_value = 3 #横坐标的初始（用键盘控制）
+cord_offset = {'x': 3, 'y':4}
 
 colour = (0, 255, 0)
+
 down_time = 1000
 
 while(1):
 
-    num_time += 1
-    img_tmp = cv_image.copy()
+    img_tmp = img.copy()
     img_map_tmp = img_map.copy()
 
-    # log贴到大图上
-    row_value = num_time + init_cord[0]
-    col_value = col_value # ????
+    w_block = log_map.shape[1]
+    h_block = log_map.shape[0]
 
-    sp = log_map.shape
+    y_offset = cord_offset['y'] - h_block # log在大图中的左上角的行坐标
+    x_offset = cord_offset['x']           # log在大图中的左上角的列坐标
 
-    r_p = row_value - sp[0] # log在大图中的左上角的行坐标
-    c_p = col_value # log在大图中的左上角的列坐标
+    # 判断旋转之后是否越界
+    if y_offset < 0: y_offset = 0
+    if x_offset < 0: x_offset = 0
+    if (y_offset + h_block) > img_map.shape[0]:
+        y_offset = img_map.shape[0] - h_block
+    if (x_offset + w_block) > img_map.shape[1]:
+        x_offset = img_map.shape[1] - w_block
 
-    # 填充映射图
-    img_map_tmp[r_p: (r_p + sp[0]), c_p:(c_p + sp[1])] = log_map
+    # 填充映射图(执行 或 运算)
+    fill_img_map(img_map_tmp, log_map, (y_offset, x_offset))
 
-    # 填充原始图
-    roi_info = {'row_p':r_p, 'col_p':c_p, 'h':sp[0], 'w':sp[1]}
-    fill_ori(img_tmp, roi_info, log_map, colour)
+    print log_map
+    print img_map_tmp
 
-    # 判断是否碰撞（重新初始化数据）
-    if ((num_time < 20 and collision_det(img_map_tmp, roi_info)) or num_time >= 20):
+    # 判断是否碰撞
+    is_collision = collision_det(img_map_tmp, log_map, (y_offset, x_offset))
 
-        shape = random.choice(['I', 'S', 'Z', 'L', 'J', 'O', 'T'])
+    if(is_collision and y_offset < 4): # game_over
+        print 'game over !!!'
+        break
+
+    if (is_collision):
+
         colour = random.choice([(0, 0, 255), (255, 0, 0), (0, 255, 0)])
-        log_map = get_map_roi(shape)
-        num_time = 0
-        cv_image = img_tmp.copy()
+        log_map = random.choice(shape_list)
         img_map = img_map_tmp.copy()
-        col_value = init_cord[1]
+        cord_offset = {'x': 3, 'y': 4}
         down_time = 1000
 
+        img_map = delete_full_line(img_map)
+
+    # 画图显示
+    redraw_img(img_map_tmp, img_tmp)
 
     # 画横线
     for i in range(0 + 4, s_num_h):
@@ -179,7 +220,6 @@ while(1):
     # 画竖线
     for j in range(1, s_num_w):
         cv2.line(img_tmp, (j * square_w, 0 + 4 * square_w), (j * square_w, img_h), (128, 128, 128))
-
 
     # 隐藏上端区域
     img_tmp[0:(0 + 4 * square_h), 0:(0 + img_w)] = 255
@@ -189,19 +229,21 @@ while(1):
     key = cv2.waitKey(down_time)
 
     # 检测左右碰撞
-    can_left_move, can_right_move = l_r_collision_det(roi_info)
+    can_left_move, can_right_move = l_r_collision_det(img_map_tmp, (y_offset, x_offset, h_block, w_block))
 
     if(can_left_move and key == ord("a")):
-        col_value -= 1
+        cord_offset['x'] -= 1
 
     if (can_right_move and key == ord("d")):
-        col_value += 1
+        cord_offset['x'] += 1
 
     if key == ord("s"): # 旋转
         log_map = rotae_log(log_map)
 
     if key == ord('j'): # 快速下落
-        down_time = 10
+        down_time = 5
+
+    cord_offset['y'] += 1
 
 
 cv2.destroyWindow("pic")
