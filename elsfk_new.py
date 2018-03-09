@@ -2,11 +2,10 @@
 import cv2
 import numpy as np
 import random
+import time
 
 from PIL import Image
 from PIL import ImageDraw
-import threading
-import time
 import cv2.cv
 
 
@@ -137,8 +136,6 @@ def delete_full_line(img_map):
 
 
 
-
-
 square_w = 30
 square_h = 30
 
@@ -167,7 +164,9 @@ cord_offset = {'x': 3, 'y':4}
 
 colour = (0, 255, 0)
 
-down_time = 1000
+t_start = time.time()
+
+time_interval = 1
 
 while(1):
 
@@ -191,9 +190,6 @@ while(1):
     # 填充映射图(执行 或 运算)
     fill_img_map(img_map_tmp, log_map, (y_offset, x_offset))
 
-    print log_map
-    print img_map_tmp
-
     # 判断是否碰撞
     is_collision = collision_det(img_map_tmp, log_map, (y_offset, x_offset))
 
@@ -201,15 +197,20 @@ while(1):
         print 'game over !!!'
         break
 
-    if (is_collision):
+    t_cur = time.time()
 
-        colour = random.choice([(0, 0, 255), (255, 0, 0), (0, 255, 0)])
-        log_map = random.choice(shape_list)
-        img_map = img_map_tmp.copy()
-        cord_offset = {'x': 3, 'y': 4}
-        down_time = 1000
+    if (t_cur - t_start) >= time_interval:
+        cord_offset['y'] += 1
+        t_start = t_cur
 
-        img_map = delete_full_line(img_map)
+        if (is_collision):
+            colour = random.choice([(0, 0, 255), (255, 0, 0), (0, 255, 0)])
+            log_map = random.choice(shape_list)
+            img_map = img_map_tmp.copy()
+            cord_offset = {'x': 3, 'y': 4}
+            time_interval = 1
+
+            img_map = delete_full_line(img_map)
 
     # 画图显示
     redraw_img(img_map_tmp, img_tmp)
@@ -226,7 +227,7 @@ while(1):
 
     # 显示图像
     cv2.imshow("pic", img_tmp)
-    key = cv2.waitKey(down_time)
+    key = cv2.waitKey(3000)
 
     # 检测左右碰撞
     can_left_move, can_right_move = l_r_collision_det(img_map_tmp, (y_offset, x_offset, h_block, w_block))
@@ -241,9 +242,8 @@ while(1):
         log_map = rotae_log(log_map)
 
     if key == ord('j'): # 快速下落
-        down_time = 5
+        time_interval = 0
 
-    cord_offset['y'] += 1
 
 
 cv2.destroyWindow("pic")
