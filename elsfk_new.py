@@ -6,16 +6,28 @@ import time
 
 from PIL import Image
 from PIL import ImageDraw
-import cv2.cv
 
-
+'''
 def redraw_img(img_map, img):
     for y in range(0, img_map.shape[0]):  # 行
         for x in range(0, img_map.shape[1]):  # 列
             if img_map[y, x] == 1:
                 img[(y * square_h):(y * square_h + square_h),
                     (x * square_w):(x * square_w + square_w)] = (255, 0, 0)
-
+'''
+def redraw_img(img_map, log_map, img, y_offset, x_offset):
+    for y in range(0, img_map.shape[0]):  # 行
+        for x in range(0, img_map.shape[1]):  # 列
+            if img_map[y, x] == 1:
+                img[(y * square_h):(y * square_h + square_h),
+                (x * square_w):(x * square_w + square_w)] = (255, 0, 0)
+    for y in range(0, log_map.shape[0]):
+        for x in range(0, log_map.shape[1]):
+            if log_map[y, x] == 1:
+                y_new = y + y_offset
+                x_new = x + x_offset
+                img[(y_new * square_h):(y_new * square_h + square_h),
+                    (x_new * square_w):(x_new * square_w + square_w)] = (255, 0, 0)
 
 # 获取形状列表
 def get_block_shape_list():
@@ -52,20 +64,20 @@ def get_block_shape_list():
     return shape_list
 
 #  填充 img_map大图
-def fill_img_map(img_map, log_map, (y_offset, x_offset)):
+def fill_img_map(img_map, log_map, y_offset, x_offset):
     for j in range(0, log_map.shape[0]):
         for i in range(0, log_map.shape[1]):
-            img_map_tmp[j + y_offset, i + x_offset] = \
-                img_map_tmp[j + y_offset, i + x_offset] or log_map[j, i]
+            img_map[j + y_offset, i + x_offset] = \
+                img_map[j + y_offset, i + x_offset] or log_map[j, i]
 
 
 # 检测上下碰撞和游戏是否已经结束
-def collision_det(img_map, log_map, (y_offset, x_offset)):
+def collision_det(img_map, log_map, y_offset, x_offset):
 
     is_collision = False
 
     # 检测是否和下边缘碰撞
-    if((y_offset + h_block) >= img_map.shape[0]):
+    if((y_offset + log_map.shape[0]) >= img_map.shape[0]):
 
         is_collision = True
         return is_collision
@@ -92,25 +104,26 @@ def collision_det(img_map, log_map, (y_offset, x_offset)):
 
 
 # 检测左右碰撞
-def l_r_collision_det(img_map, (y_offset, x_offset, h_block, w_block)):
+def l_r_collision_det(img_map, log_map, y_offset, x_offset):
 
     can_left_move = True
     can_right_move = True
-    for i in range(0, h_block):
+    for j in range(0, log_map.shape[0]):
 
-        if (x_offset <= 0 or
-                (img_map[(i + y_offset), (x_offset - 1)] == 1 and
-                 img_map[(i + y_offset), (x_offset)] == 1)):
+        for i in range(0, log_map.shape[1]):
+            if log_map[j, i] == 1:
+                y = j + y_offset
+                x = i + x_offset
+                if(x - 1) < 0:
+                    can_left_move = False
+                if(x + 1) > img_map.shape[1] - 1:
+                    can_right_move = False
+                elif(img_map[y, x - 1] == 1):
+                    can_left_move = False
+                elif(img_map[y, x + 1] == 1):
+                    can_right_move = False
 
-            can_left_move = False
-
-        if ((x_offset + w_block -1 ) >= (img_map.shape[1] - 1) or
-                (img_map[(i + y_offset), (x_offset + w_block - 1)] == 1 and
-                 img_map[(i + y_offset), (x_offset + w_block)] == 1)):
-
-            can_right_move = False
-
-    return can_left_move, can_right_move
+    return  can_left_move, can_right_move
 
 
 # 旋转log图
@@ -171,7 +184,6 @@ time_interval = 1
 while(1):
 
     img_tmp = img.copy()
-    img_map_tmp = img_map.copy()
 
     w_block = log_map.shape[1]
     h_block = log_map.shape[0]
@@ -187,14 +199,11 @@ while(1):
     if (x_offset + w_block) > img_map.shape[1]:
         x_offset = img_map.shape[1] - w_block
 
-    # 填充映射图(执行 或 运算)
-    fill_img_map(img_map_tmp, log_map, (y_offset, x_offset))
-
     # 判断是否碰撞
-    is_collision = collision_det(img_map_tmp, log_map, (y_offset, x_offset))
+    is_collision = collision_det(img_map, log_map, y_offset, x_offset)
 
     if(is_collision and y_offset < 4): # game_over
-        print 'game over !!!'
+        print ('game over !!!')
         break
 
     t_cur = time.time()
@@ -204,16 +213,18 @@ while(1):
         t_start = t_cur
 
         if (is_collision):
-            colour = random.choice([(0, 0, 255), (255, 0, 0), (0, 255, 0)])
+           # colour = random.choice([(0, 0, 255), (255, 0, 0), (0, 255, 0)])
+
+            fill_img_map(img_map, log_map, y_offset, x_offset)
             log_map = random.choice(shape_list)
-            img_map = img_map_tmp.copy()
+
             cord_offset = {'x': 3, 'y': 4}
             time_interval = 1
-
             img_map = delete_full_line(img_map)
+            continue
 
     # 画图显示
-    redraw_img(img_map_tmp, img_tmp)
+    redraw_img(img_map, log_map, img_tmp, y_offset, x_offset)
 
     # 画横线
     for i in range(0 + 4, s_num_h):
@@ -223,14 +234,14 @@ while(1):
         cv2.line(img_tmp, (j * square_w, 0 + 4 * square_w), (j * square_w, img_h), (128, 128, 128))
 
     # 隐藏上端区域
-    img_tmp[0:(0 + 4 * square_h), 0:(0 + img_w)] = 255
+        img_tmp[0:(0 + 4 * square_h), 0:(0 + img_w)] = 255
 
     # 显示图像
     cv2.imshow("pic", img_tmp)
-    key = cv2.waitKey(3000)
+    key = cv2.waitKey(20)
 
     # 检测左右碰撞
-    can_left_move, can_right_move = l_r_collision_det(img_map_tmp, (y_offset, x_offset, h_block, w_block))
+    can_left_move, can_right_move = l_r_collision_det(img_map, log_map, y_offset, x_offset)
 
     if(can_left_move and key == ord("a")):
         cord_offset['x'] -= 1
